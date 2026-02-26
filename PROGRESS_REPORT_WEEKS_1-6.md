@@ -49,8 +49,6 @@ The backend is **fully functional and tested**:
 
 ### 2.1 System Architecture Diagram
 
-![System Architecture](./docs/ARCHITECTURE_DIAGRAM.md)
-
 The system is organized into four layers:
 
 1. **Presentation Layer**: FastAPI REST API exposing `/analyze`, `/searches`, and `/export` endpoints.
@@ -62,8 +60,6 @@ The system is organized into four layers:
 
 ### 2.2 Data Flow Diagram
 
-![Data Flow](./docs/DATA_FLOW_DIAGRAM.md)
-
 The sentiment pipeline operates as follows:
 1. User submits keyword and optional parameters (limit, source).
 2. API creates a `searches` record and collects Reddit posts.
@@ -74,8 +70,6 @@ The sentiment pipeline operates as follows:
 **Key Decision**: Synchronous analysis within a single request ensures immediate feedback; future optimization will add async workers for high-volume ingestion via Celery.
 
 ### 2.3 Database Schema Diagram
-
-![Database Schema](./docs/DATABASE_SCHEMA_DIAGRAM.md)
 
 **Searches Table**:
 - Stores search metadata (keyword, source, counts of analyzed/positive/neutral/negative posts)
