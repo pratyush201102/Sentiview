@@ -2,15 +2,27 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 
 class SentimentService:
+    POSITIVE_THRESHOLD = 0.05
+    NEGATIVE_THRESHOLD = -0.05
+
     def __init__(self) -> None:
         self.analyzer = SentimentIntensityAnalyzer()
 
     def score_text(self, text: str) -> dict[str, float | str]:
+        if not text.strip():
+            return {
+                "neg_score": 0.0,
+                "neu_score": 1.0,
+                "pos_score": 0.0,
+                "compound_score": 0.0,
+                "sentiment_label": "neutral",
+            }
+
         polarity = self.analyzer.polarity_scores(text)
         compound = float(polarity["compound"])
-        if compound > 0.05:
+        if compound > self.POSITIVE_THRESHOLD:
             label = "positive"
-        elif compound < -0.05:
+        elif compound < self.NEGATIVE_THRESHOLD:
             label = "negative"
         else:
             label = "neutral"
