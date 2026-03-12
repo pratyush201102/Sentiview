@@ -18,6 +18,24 @@ Sentiview is a real-time social media sentiment analysis backend focused on Redd
 - Initial sentiment processing pipeline implemented and persisted.
 
 ## Quick Start
+
+### Automated Startup (Recommended)
+Simply run the startup script from the project directory:
+```bash
+./start.sh
+```
+
+This will:
+- Activate your virtual environment
+- Setup environment variables
+- Start PostgreSQL (if available)
+- Initialize the database schema
+- Launch the FastAPI server with hot-reload
+- Automatically open the API docs in your browser
+
+### Manual Setup
+If you prefer manual setup or the script doesn't work:
+
 1. Create and activate a virtual environment:
    - `python3 -m venv .venv`
    - `source .venv/bin/activate`
@@ -31,6 +49,8 @@ Sentiview is a real-time social media sentiment analysis backend focused on Redd
    - `psql postgresql://postgres:postgres@localhost:5432/sentiview -f backend/sql/schema.sql`
 6. Start API:
    - `uvicorn backend.app.main:app --reload --port 8000`
+
+Once running, access the API documentation at `http://localhost:8000/docs`
 
 ## API Endpoints
 - `GET /health` — service health check.
