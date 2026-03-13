@@ -51,6 +51,8 @@ class RedditClient:
         if not keyword or not keyword.strip():
             logger.warning("Empty keyword provided to search_posts")
             raise ValueError("Keyword cannot be empty")
+
+        normalized_keyword = keyword.strip()
             
         if not isinstance(limit, int) or limit <= 0:
             logger.warning(f"Invalid limit provided: {limit}")
@@ -58,22 +60,25 @@ class RedditClient:
         
         url = f"{self.base_url}/search.json"
         params = {
-            "q": keyword,
+            "q": normalized_keyword,
             "sort": "new",
             "limit": limit,
             "restrict_sr": "false",
             "type": "link",
         }
-        headers = {"User-Agent": self.user_agent}
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "application/json",
+        }
 
         try:
-            logger.info(f"Fetching Reddit posts for keyword: {keyword} (limit: {limit})")
+            logger.info(f"Fetching Reddit posts for keyword: {normalized_keyword} (limit: {limit})")
             with httpx.Client(timeout=20.0, follow_redirects=True) as client:
                 response = client.get(url, params=params, headers=headers)
                 response.raise_for_status()
                 payload = response.json()
             
-            logger.debug(f"Received response from Reddit API for '{keyword}'")
+            logger.debug(f"Received response from Reddit API for '{normalized_keyword}'")
 
             children = payload.get("data", {}).get("children", [])
             posts = []
@@ -94,7 +99,7 @@ class RedditClient:
                     }
                 )
 
-            logger.info(f"Successfully fetched {len(posts)} posts for keyword: {keyword}")
+            logger.info(f"Successfully fetched {len(posts)} posts for keyword: {normalized_keyword}")
             return posts
             
         except httpx.HTTPError as e:
