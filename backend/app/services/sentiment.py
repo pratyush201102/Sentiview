@@ -19,10 +19,31 @@ class SentimentService:
     POSITIVE_THRESHOLD = 0.05
     NEGATIVE_THRESHOLD = -0.05
 
-    def __init__(self) -> None:
-        """Initialize VADER sentiment analyzer."""
+    def __init__(
+        self,
+        positive_threshold: float = POSITIVE_THRESHOLD,
+        negative_threshold: float = NEGATIVE_THRESHOLD,
+    ) -> None:
+        """Initialize VADER sentiment analyzer and scoring thresholds."""
+        self.positive_threshold = float(positive_threshold)
+        self.negative_threshold = float(negative_threshold)
+
+        if not -1.0 <= self.negative_threshold <= 1.0:
+            raise ValueError("negative_threshold must be between -1.0 and 1.0")
+
+        if not -1.0 <= self.positive_threshold <= 1.0:
+            raise ValueError("positive_threshold must be between -1.0 and 1.0")
+
+        if self.negative_threshold >= self.positive_threshold:
+            raise ValueError("negative_threshold must be lower than positive_threshold")
+
         self.analyzer = SentimentIntensityAnalyzer()
-        logger.debug("SentimentService initialized with VADER analyzer")
+        logger.debug(
+            "SentimentService initialized with VADER analyzer "
+            "(negative_threshold=%s, positive_threshold=%s)",
+            self.negative_threshold,
+            self.positive_threshold,
+        )
 
     def score_text(self, text: str) -> dict[str, float | Literal["positive", "negative", "neutral"]]:
         """
@@ -60,9 +81,9 @@ class SentimentService:
             polarity = self.analyzer.polarity_scores(text)
             compound = float(polarity["compound"])
             
-            if compound > self.POSITIVE_THRESHOLD:
+            if compound > self.positive_threshold:
                 label = "positive"
-            elif compound < self.NEGATIVE_THRESHOLD:
+            elif compound < self.negative_threshold:
                 label = "negative"
             else:
                 label = "neutral"
