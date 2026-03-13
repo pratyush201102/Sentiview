@@ -49,9 +49,9 @@ else
             sleep 2
             
             # Check if schema exists
-            if ! psql postgresql://postgres:postgres@localhost:5432/sentiview -c "\dt" &>/dev/null 2>&1; then
+            if ! psql postgresql://postgres:postgres@localhost:5433/sentiview -c "\dt" &>/dev/null 2>&1; then
                 echo -e "${YELLOW}   Creating database schema...${NC}"
-                if psql postgresql://postgres:postgres@localhost:5432/sentiview -f backend/sql/schema.sql; then
+                if psql postgresql://postgres:postgres@localhost:5433/sentiview -f backend/sql/schema.sql; then
                     echo -e "${GREEN}   ✓ Schema created${NC}"
                 else
                     echo -e "${YELLOW}   Could not create schema (database may not be ready)${NC}"

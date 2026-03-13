@@ -2,10 +2,12 @@ import csv
 import io
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
 from backend.app.db.models import Search, SentimentResult
 from backend.app.db.session import get_db
@@ -141,6 +143,17 @@ def analyze_keyword(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
         return AnalyzeResponse(search=summary, results=results)
         
+    except httpx.HTTPError as e:
+        logger.error(f"Reddit API request failed: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=502, detail="Failed to fetch data from Reddit API")
+    except OperationalError as e:
+        logger.error(f"Database connection error during analysis: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Verify DATABASE_URL and ensure PostgreSQL is running.",
+        )
     except Exception as e:
         logger.error(f"Error during sentiment analysis: {str(e)}", exc_info=True)
         db.rollback()
@@ -180,6 +193,12 @@ def list_searches(db: Session = Depends(get_db)):
             )
             for row in rows
         ]
+    except OperationalError as e:
+        logger.error(f"Database connection error retrieving searches: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Verify DATABASE_URL and ensure PostgreSQL is running.",
+        )
     except Exception as e:
         logger.error(f"Error retrieving searches: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving search history")
@@ -244,6 +263,12 @@ def get_search(search_id: str, db: Session = Depends(get_db)):
         )
     except HTTPException:
         raise
+    except OperationalError as e:
+        logger.error(f"Database connection error retrieving search {search_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Verify DATABASE_URL and ensure PostgreSQL is running.",
+        )
     except Exception as e:
         logger.error(f"Error retrieving search {search_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving search")
@@ -320,6 +345,12 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
         )
     except HTTPException:
         raise
+    except OperationalError as e:
+        logger.error(f"Database connection error exporting CSV for search {search_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Verify DATABASE_URL and ensure PostgreSQL is running.",
+        )
     except Exception as e:
         logger.error(f"Error exporting CSV for search {search_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating CSV export")

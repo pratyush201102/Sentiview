@@ -1,6 +1,6 @@
 # Sentiview
 
-Sentiview is a real-time social media sentiment analysis backend focused on Reddit content ingestion, NLP sentiment scoring, and API-first delivery for dashboard visualization.
+Sentiview is a social media sentiment analysis project with a FastAPI backend, PostgreSQL storage, and a frontend dashboard that visualizes sentiment using Chart.js.
 
 ## Week 1–2 (Completed in this setup)
 - Project scope finalized with a backend-first MVP.
@@ -46,7 +46,7 @@ If you prefer manual setup or the script doesn't work:
 4. Start PostgreSQL:
    - `docker compose up -d`
 5. Create schema:
-   - `psql postgresql://postgres:postgres@localhost:5432/sentiview -f backend/sql/schema.sql`
+   - `psql postgresql://postgres:postgres@localhost:5433/sentiview -f backend/sql/schema.sql`
 6. Start API:
    - `uvicorn backend.app.main:app --reload --port 8000`
 
@@ -59,5 +59,20 @@ Once running, access the API documentation at `http://localhost:8000/docs`
 - `GET /api/v1/searches/{search_id}` — detailed results for one search.
 - `GET /api/v1/searches/{search_id}/export.csv` — export search results as CSV.
 
-## Suggested Next Step (Week 7–8)
-Build the React dashboard to consume these endpoints for pie and line charts.
+## Week 7–8 (Completed in this setup)
+- Frontend dashboard added under `frontend/`.
+- Dashboard layout includes query form, summary metrics, chart panel, and history table.
+- Chart.js integrated for:
+   - Pie chart: sentiment distribution (positive/neutral/negative)
+   - Line chart: recent search sentiment trend
+- Frontend integrated with backend endpoints (`/analyze`, `/searches`, `/searches/{id}`, `/export.csv`).
+
+## Frontend Quick Start
+
+1. Start backend API (`uvicorn backend.app.main:app --reload --port 8000`)
+2. Serve frontend static files:
+    - `cd frontend`
+    - `python3 -m http.server 5173`
+3. Open `http://localhost:5173`
+
+Default API base in UI: `http://localhost:8000/api/v1`

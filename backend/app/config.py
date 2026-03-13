@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_port: int = 8000
 
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sentiview"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5433/sentiview"
 
     reddit_user_agent: str = "sentiview/0.1"
     reddit_base_url: str = "https://www.reddit.com"

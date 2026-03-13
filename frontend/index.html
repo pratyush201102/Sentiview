@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentiview Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header class="container header">
+      <div>
+        <h1>Sentiview Dashboard</h1>
+        <p>Analyze Reddit sentiment and visualize results.</p>
+      </div>
+      <div class="api-config">
+        <label for="apiBase">API Base</label>
+        <input id="apiBase" type="text" value="http://localhost:8000/api/v1" />
+      </div>
+    </header>
+
+    <main class="container grid">
+      <section class="card">
+        <h2>Analyze Keyword</h2>
+        <form id="analyzeForm" class="form-grid">
+          <label for="keyword">Keyword</label>
+          <input id="keyword" type="text" minlength="2" required placeholder="e.g. AI ethics" />
+
+          <label for="limit">Post Limit</label>
+          <input id="limit" type="number" min="1" max="100" value="25" required />
+
+          <button id="analyzeBtn" type="submit">Run Analysis</button>
+        </form>
+        <p id="status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="card">
+        <h2>Search Summary</h2>
+        <div class="metrics" id="metrics">
+          <div class="metric"><span>Keyword</span><strong id="mKeyword">-</strong></div>
+          <div class="metric"><span>Fetched</span><strong id="mFetched">0</strong></div>
+          <div class="metric"><span>Analyzed</span><strong id="mAnalyzed">0</strong></div>
+          <div class="metric"><span>Positive</span><strong id="mPositive">0</strong></div>
+          <div class="metric"><span>Neutral</span><strong id="mNeutral">0</strong></div>
+          <div class="metric"><span>Negative</span><strong id="mNegative">0</strong></div>
+        </div>
+        <button id="exportBtn" disabled>Export CSV</button>
+      </section>
+
+      <section class="card chart-card">
+        <h2>Sentiment Distribution</h2>
+        <canvas id="distributionChart"></canvas>
+      </section>
+
+      <section class="card chart-card">
+        <h2>Recent Search Trends</h2>
+        <canvas id="trendChart"></canvas>
+      </section>
+
+      <section class="card full-width">
+        <h2>Search History</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Keyword</th>
+                <th>Date</th>
+                <th>Analyzed</th>
+                <th>Positive</th>
+                <th>Neutral</th>
+                <th>Negative</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

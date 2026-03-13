@@ -841,3 +841,30 @@ curl -X POST http://localhost:8000/api/v1/analyze \
 **Report Compiled**: February 25, 2026  
 **Weeks Completed**: 1–6 (Backend MVP)  
 **GitHub**: https://github.com/pratyushrajdulal/sentiview
+
+---
+
+## Week 7–8 Implementation Update (March 13, 2026)
+
+The following frontend and visualization tasks were implemented to extend the project beyond the Week 1–6 backend milestone:
+
+- Added dashboard frontend in `frontend/`:
+  - `frontend/index.html`
+  - `frontend/styles.css`
+  - `frontend/app.js`
+- Implemented UI components:
+  - Keyword analysis form
+  - Search summary metrics cards
+  - Recent search history table
+  - CSV export action for selected search
+- Integrated Chart.js visualizations:
+  - Pie chart for positive/neutral/negative distribution
+  - Line chart for sentiment trends across recent searches
+- Connected frontend to backend API endpoints:
+  - `POST /api/v1/analyze`
+  - `GET /api/v1/searches`
+  - `GET /api/v1/searches/{search_id}`
+  - `GET /api/v1/searches/{search_id}/export.csv`
+- Enabled local frontend-backend browser integration by adding CORS middleware in `backend/app/main.py`.
+
+This update confirms completion of the Week 7–8 milestone: **frontend interface, dashboard layout, and Chart.js-based visualization integration**.
