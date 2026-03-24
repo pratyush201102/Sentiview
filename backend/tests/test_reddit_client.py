@@ -1,4 +1,5 @@
 import pytest
+import httpx
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 
@@ -281,8 +282,6 @@ class TestSearchPostsErrorHandling:
 
     def test_search_posts_handles_connection_error(self, reddit_client):
         """search_posts should handle connection errors."""
-        import httpx
-        
         with patch("backend.app.services.reddit_client.httpx.Client") as mock_client_class:
             mock_client = MagicMock()
             mock_client.__enter__.return_value = mock_client
@@ -291,3 +290,81 @@ class TestSearchPostsErrorHandling:
 
             with pytest.raises(httpx.ConnectError):
                 reddit_client.search_posts("test", limit=10)
+
+
+class TestSearchPostsRetries:
+    """Test retry behavior for transient Reddit API failures."""
+
+    def test_search_posts_retries_on_429_then_succeeds(self, reddit_client, mock_reddit_response):
+        """search_posts should retry on 429 and succeed on a later attempt."""
+        request = httpx.Request("GET", f"{reddit_client.base_url}/search.json")
+        too_many_requests = httpx.Response(429, request=request)
+        status_error = httpx.HTTPStatusError(
+            "Too Many Requests",
+            request=request,
+            response=too_many_requests,
+        )
+
+        with patch("backend.app.services.reddit_client.httpx.Client") as mock_client_class, patch(
+            "backend.app.services.reddit_client.time.sleep"
+        ) as mock_sleep:
+            first_response = Mock()
+            first_response.raise_for_status.side_effect = status_error
+
+            second_response = Mock()
+            second_response.raise_for_status.return_value = None
+            second_response.json.return_value = mock_reddit_response
+
+            mock_client = MagicMock()
+            mock_client.__enter__.return_value = mock_client
+            mock_client.get.side_effect = [first_response, second_response]
+            mock_client_class.return_value = mock_client
+
+            posts = reddit_client.search_posts("python", limit=10)
+
+            assert len(posts) == 2
+            assert mock_client.get.call_count == 2
+            mock_sleep.assert_called_once()
+
+    def test_search_posts_does_not_retry_on_404(self, reddit_client):
+        """search_posts should not retry on non-retriable 4xx errors."""
+        request = httpx.Request("GET", f"{reddit_client.base_url}/search.json")
+        not_found = httpx.Response(404, request=request)
+        status_error = httpx.HTTPStatusError(
+            "Not Found",
+            request=request,
+            response=not_found,
+        )
+
+        with patch("backend.app.services.reddit_client.httpx.Client") as mock_client_class, patch(
+            "backend.app.services.reddit_client.time.sleep"
+        ) as mock_sleep:
+            response = Mock()
+            response.raise_for_status.side_effect = status_error
+
+            mock_client = MagicMock()
+            mock_client.__enter__.return_value = mock_client
+            mock_client.get.return_value = response
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(httpx.HTTPStatusError):
+                reddit_client.search_posts("python", limit=10)
+
+            assert mock_client.get.call_count == 1
+            mock_sleep.assert_not_called()
+
+    def test_search_posts_retries_request_errors_up_to_max_retries(self, reddit_client):
+        """search_posts should retry request errors and then raise when retries are exhausted."""
+        with patch("backend.app.services.reddit_client.httpx.Client") as mock_client_class, patch(
+            "backend.app.services.reddit_client.time.sleep"
+        ) as mock_sleep:
+            mock_client = MagicMock()
+            mock_client.__enter__.return_value = mock_client
+            mock_client.get.side_effect = httpx.TimeoutException("Request timed out")
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(httpx.TimeoutException):
+                reddit_client.search_posts("python", limit=10)
+
+            assert mock_client.get.call_count == reddit_client.max_retries + 1
+            assert mock_sleep.call_count == reddit_client.max_retries

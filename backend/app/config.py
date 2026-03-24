@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     reddit_user_agent: str = "sentiview/0.1"
     reddit_base_url: str = "https://www.reddit.com"
     default_fetch_limit: int = 25
+    reddit_max_retries: int = 2
+    reddit_retry_backoff_seconds: float = 0.5
 
 
 settings = Settings()

@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -24,6 +25,8 @@ class RedditClient:
         """Initialize Reddit API client with configured settings."""
         self.base_url = settings.reddit_base_url.rstrip("/")
         self.user_agent = settings.reddit_user_agent
+        self.max_retries = max(0, int(settings.reddit_max_retries))
+        self.retry_backoff_seconds = max(0.0, float(settings.reddit_retry_backoff_seconds))
         logger.debug(f"RedditClient initialized with base_url: {self.base_url}")
 
     def search_posts(self, keyword: str, limit: int) -> list[dict]:
@@ -74,9 +77,46 @@ class RedditClient:
         try:
             logger.info(f"Fetching Reddit posts for keyword: {normalized_keyword} (limit: {limit})")
             with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-                response = client.get(url, params=params, headers=headers)
-                response.raise_for_status()
-                payload = response.json()
+                payload = None
+                for attempt in range(self.max_retries + 1):
+                    try:
+                        response = client.get(url, params=params, headers=headers)
+                        response.raise_for_status()
+                        payload = response.json()
+                        break
+                    except httpx.HTTPStatusError as e:
+                        status_code = e.response.status_code if e.response is not None else None
+                        is_retriable = status_code in {429, 500, 502, 503, 504}
+                        if not is_retriable or attempt >= self.max_retries:
+                            raise
+
+                        sleep_seconds = self.retry_backoff_seconds * (2 ** attempt)
+                        logger.warning(
+                            "Transient Reddit API status %s for keyword '%s', retrying in %.2fs (attempt %s/%s)",
+                            status_code,
+                            normalized_keyword,
+                            sleep_seconds,
+                            attempt + 1,
+                            self.max_retries,
+                        )
+                        time.sleep(sleep_seconds)
+                    except httpx.RequestError as e:
+                        if attempt >= self.max_retries:
+                            raise
+
+                        sleep_seconds = self.retry_backoff_seconds * (2 ** attempt)
+                        logger.warning(
+                            "Transient Reddit API request error '%s' for keyword '%s', retrying in %.2fs (attempt %s/%s)",
+                            type(e).__name__,
+                            normalized_keyword,
+                            sleep_seconds,
+                            attempt + 1,
+                            self.max_retries,
+                        )
+                        time.sleep(sleep_seconds)
+
+                if payload is None:
+                    raise RuntimeError("Reddit API response payload unavailable after retries")
             
             logger.debug(f"Received response from Reddit API for '{normalized_keyword}'")
 
