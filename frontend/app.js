@@ -184,6 +184,15 @@ function truncateLabel(text, maxLength = 18) {
   return `${text.slice(0, maxLength - 1)}…`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function renderDistributionChart(search) {
   if (state.distributionChart) {
     state.distributionChart.destroy();
@@ -359,15 +368,22 @@ function renderTrendChart(searches) {
 function renderHistory(searches) {
   el.historyBody.innerHTML = "";
 
+  if (!Array.isArray(searches) || searches.length === 0) {
+    const emptyRow = document.createElement("tr");
+    emptyRow.innerHTML = '<td colspan="6">No searches yet. Run an analysis to populate history.</td>';
+    el.historyBody.appendChild(emptyRow);
+    return;
+  }
+
   searches.forEach((item) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${item.keyword}</td>
-      <td>${new Date(item.created_at).toLocaleString()}</td>
-      <td>${item.analyzed_count}</td>
-      <td>${item.positive_count}</td>
-      <td>${item.neutral_count}</td>
-      <td>${item.negative_count}</td>
+      <td>${escapeHtml(item.keyword)}</td>
+      <td>${escapeHtml(new Date(item.created_at).toLocaleString())}</td>
+      <td>${escapeHtml(item.analyzed_count)}</td>
+      <td>${escapeHtml(item.positive_count)}</td>
+      <td>${escapeHtml(item.neutral_count)}</td>
+      <td>${escapeHtml(item.negative_count)}</td>
     `;
 
     row.addEventListener("click", async () => {
