@@ -67,6 +67,21 @@ Once running, access the API documentation at `http://localhost:8000/docs`
    - Line chart: recent search sentiment trend
 - Frontend integrated with backend endpoints (`/analyze`, `/searches`, `/searches/{id}`, `/export.csv`).
 
+## Week 9–10 (Optimization & UX)
+- Added skeleton loader states in the dashboard for long API operations:
+   - Summary metrics shimmer placeholders
+   - Chart and history table loading overlays
+- Improved mobile responsiveness with tighter breakpoints and single-column behavior:
+   - Added Tailwind utility classes to reinforce responsive spacing and typography
+   - Form controls stack on small screens
+   - Metrics grid adapts from 3 columns to 2 columns to 1 column
+   - Chart heights scale down for compact devices
+   - Table remains horizontally scrollable on narrow viewports
+- Improved frontend-backend integration reliability:
+   - Standardized API root resolution for health checks
+   - Added request timeout handling for long-running calls
+   - Added robust API error parsing for JSON/text error responses
+
 ## Frontend Quick Start
 
 1. Start backend API (`uvicorn backend.app.main:app --reload --port 8000`)

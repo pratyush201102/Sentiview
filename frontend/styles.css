@@ -1,6 +1,14 @@
 :root {
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --bg-main: #f4f6f9;
+  --bg-card: #ffffff;
+  --border: #dbe2ea;
+  --ink-main: #1e293b;
+  --ink-soft: #475569;
+  --brand: #0f62fe;
+  --skeleton-a: #e5eaf1;
+  --skeleton-b: #f3f6fa;
 }
 
 * {
@@ -9,8 +17,10 @@
 
 body {
   margin: 0;
-  background: #f4f6f9;
-  color: #1e293b;
+  background:
+    radial-gradient(circle at 5% 5%, #ffffff 0, #eef3f9 28%, transparent 55%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg-main) 22%, #eef2f7 100%);
+  color: var(--ink-main);
 }
 
 .container {
@@ -56,10 +66,11 @@ body {
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #dbe2ea;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.04);
 }
 
 .chart-card {
@@ -100,8 +111,8 @@ button {
 
 button {
   cursor: pointer;
-  background: #0f62fe;
-  border-color: #0f62fe;
+  background: var(--brand);
+  border-color: var(--brand);
   color: #fff;
   font-weight: 600;
 }
@@ -123,7 +134,7 @@ button:disabled {
 }
 
 .metric {
-  border: 1px solid #dbe2ea;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
   background: #fafcff;
@@ -132,7 +143,7 @@ button:disabled {
 .metric span {
   display: block;
   font-size: 12px;
-  color: #475569;
+  color: var(--ink-soft);
 }
 
 .metric strong {
@@ -164,6 +175,57 @@ tbody tr:hover {
   background: #f8fafc;
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.loading .metric-value {
+  color: transparent;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--skeleton-a), var(--skeleton-b), var(--skeleton-a));
+  background-size: 220% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.loading .metric-value {
+  min-height: 24px;
+}
+
+.card-loading {
+  position: relative;
+}
+
+.card-loading::after {
+  content: "";
+  position: absolute;
+  inset: 48px 16px 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--skeleton-a), var(--skeleton-b), var(--skeleton-a));
+  background-size: 240% 100%;
+  animation: shimmer 1.1s linear infinite;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.card-loading canvas,
+.card-loading table {
+  opacity: 0;
+}
+
+.loading .table-wrap {
+  min-height: 180px;
+}
+
+.loading #historyBody td {
+  color: transparent;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
@@ -176,5 +238,54 @@ tbody tr:hover {
 
   .api-config {
     min-width: unset;
+  }
+
+  .container {
+    padding: 14px;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-card {
+    min-height: 300px;
+  }
+
+  .chart-card canvas {
+    height: 240px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 12px;
+  }
+
+  .header h1 {
+    font-size: 1.5rem;
+  }
+
+  .header p {
+    font-size: 0.95rem;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  th,
+  td {
+    font-size: 13px;
+    white-space: nowrap;
   }
 }

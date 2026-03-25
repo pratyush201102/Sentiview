@@ -2,7 +2,10 @@ const state = {
   activeSearchId: null,
   distributionChart: null,
   trendChart: null,
+  loading: false,
 };
+
+const REQUEST_TIMEOUT_MS = 20000;
 
 const chartColors = {
   positive: "#16a34a",
@@ -40,6 +43,7 @@ const centerTextPlugin = {
 };
 
 const el = {
+  dashboardRoot: document.getElementById("dashboardRoot"),
   apiBase: document.getElementById("apiBase"),
   analyzeForm: document.getElementById("analyzeForm"),
   keyword: document.getElementById("keyword"),
@@ -56,10 +60,48 @@ const el = {
   mNegative: document.getElementById("mNegative"),
   distributionCanvas: document.getElementById("distributionChart"),
   trendCanvas: document.getElementById("trendChart"),
+  distributionCard: document.getElementById("distributionCard"),
+  trendCard: document.getElementById("trendCard"),
+  historyCard: document.getElementById("historyCard"),
 };
 
 function getApiBase() {
   return el.apiBase.value.trim().replace(/\/$/, "");
+}
+
+function getApiRoot() {
+  const base = getApiBase();
+  if (base.endsWith("/api/v1")) {
+    return base.slice(0, -7);
+  }
+  return base;
+}
+
+function parseErrorMessage(payload, fallback) {
+  if (!payload) {
+    return fallback;
+  }
+
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  if (payload.detail) {
+    return typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail);
+  }
+
+  return fallback;
+}
+
+function setLoading(isLoading) {
+  state.loading = isLoading;
+  el.dashboardRoot.classList.toggle("loading", isLoading);
+
+  [el.distributionCard, el.trendCard, el.historyCard].forEach((card) => {
+    card.classList.toggle("card-loading", isLoading);
+  });
+
+  el.analyzeBtn.disabled = isLoading;
 }
 
 function setStatus(message, isError = false) {
@@ -68,7 +110,7 @@ function setStatus(message, isError = false) {
 }
 
 async function checkBackendHealth() {
-  const response = await fetch(`${getApiBase().replace(/\/api\/v1$/, "")}/health`);
+  const response = await fetch(`${getApiRoot()}/health`);
   if (!response.ok) {
     throw new Error("API health check failed");
   }
@@ -77,17 +119,37 @@ async function checkBackendHealth() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${getApiBase()}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(`${getApiBase()}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const payload = await response.json();
+      throw new Error(parseErrorMessage(payload, `Request failed (${response.status})`));
+    }
+
     const payload = await response.text();
-    throw new Error(payload || `Request failed (${response.status})`);
+    throw new Error(parseErrorMessage(payload, `Request failed (${response.status})`));
   }
 
   const contentType = response.headers.get("content-type") || "";
@@ -317,13 +379,18 @@ function renderHistory(searches) {
 }
 
 async function loadSearch(searchId) {
-  const payload = await request(`/searches/${searchId}`);
-  state.activeSearchId = payload.search.id;
-  el.exportBtn.disabled = false;
+  try {
+    setLoading(true);
+    const payload = await request(`/searches/${searchId}`);
+    state.activeSearchId = payload.search.id;
+    el.exportBtn.disabled = false;
 
-  updateSummary(payload.search);
-  renderDistributionChart(payload.search);
-  setStatus(`Loaded search: ${payload.search.keyword}`);
+    updateSummary(payload.search);
+    renderDistributionChart(payload.search);
+    setStatus(`Loaded search: ${payload.search.keyword}`);
+  } finally {
+    setLoading(false);
+  }
 }
 
 async function loadHistory() {
@@ -338,6 +405,7 @@ async function loadHistory() {
 
 async function bootDashboard() {
   try {
+    setLoading(true);
     const health = await checkBackendHealth();
     if (health.database === "down") {
       setStatus(
@@ -351,6 +419,8 @@ async function bootDashboard() {
     setStatus("Dashboard ready.");
   } catch (error) {
     setStatus(`Initial load failed: ${error.message}`, true);
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -364,7 +434,7 @@ async function handleAnalyze(event) {
     return;
   }
 
-  el.analyzeBtn.disabled = true;
+  setLoading(true);
   setStatus("Analyzing keyword...");
 
   try {
@@ -388,7 +458,7 @@ async function handleAnalyze(event) {
   } catch (error) {
     setStatus(`Analyze failed: ${error.message}`, true);
   } finally {
-    el.analyzeBtn.disabled = false;
+    setLoading(false);
   }
 }
 
