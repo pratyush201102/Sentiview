@@ -161,22 +161,28 @@ def analyze_keyword(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/searches", response_model=list[SearchSummary])
-def list_searches(db: Session = Depends(get_db)):
+def list_searches(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """
-    Retrieve list of recent searches with aggregate sentiment counts.
+    Retrieve list of recent searches with pagination support.
     
-    Returns the 100 most recent searches ordered by creation time.
+    Returns searches ordered by creation time (newest first) with configurable pagination.
     
     Args:
+        skip: Number of results to skip (default: 0, minimum: 0)
+        limit: Number of results per page (default: 20, minimum: 1, maximum: 100)
         db: Database session dependency
         
     Returns:
         List of SearchSummary objects
     """
+    # Validate pagination parameters
+    skip = max(0, skip)
+    limit = min(100, max(1, limit))
+    
     try:
-        logger.debug("Fetching recent searches")
-        rows = db.query(Search).order_by(desc(Search.created_at)).limit(100).all()
-        logger.info(f"Retrieved {len(rows)} searches")
+        logger.debug(f"Fetching searches with skip={skip}, limit={limit}")
+        rows = db.query(Search).order_by(desc(Search.created_at)).offset(skip).limit(limit).all()
+        logger.info(f"Retrieved {len(rows)} searches (skip={skip}, limit={limit})")
         
         return [
             SearchSummary(
