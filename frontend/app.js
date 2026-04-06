@@ -51,6 +51,7 @@ const el = {
   analyzeBtn: document.getElementById("analyzeBtn"),
   exportBtn: document.getElementById("exportBtn"),
   status: document.getElementById("status"),
+  historyMeta: document.getElementById("historyMeta"),
   historyBody: document.getElementById("historyBody"),
   mKeyword: document.getElementById("mKeyword"),
   mFetched: document.getElementById("mFetched"),
@@ -410,7 +411,11 @@ async function loadSearch(searchId) {
 }
 
 async function loadHistory() {
-  const searches = await request("/searches");
+  const payload = await request("/searches");
+  const searches = Array.isArray(payload.items) ? payload.items : [];
+  const total = Number(payload.total || 0);
+
+  el.historyMeta.textContent = `Showing ${searches.length} of ${total} searches`;
   renderHistory(searches);
   renderTrendChart(searches);
 

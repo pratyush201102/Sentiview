@@ -41,3 +41,11 @@ class SearchSummary(BaseModel):
 class AnalyzeResponse(BaseModel):
     search: SearchSummary
     results: list[SentimentItem]
+
+
+class SearchListResponse(BaseModel):
+    items: list[SearchSummary]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool

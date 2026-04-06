@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 
 from backend.app.db.models import Search, SentimentResult
 from backend.app.db.session import get_db
-from backend.app.schemas import AnalyzeRequest, AnalyzeResponse, SearchSummary, SentimentItem
+from backend.app.schemas import AnalyzeRequest, AnalyzeResponse, SearchListResponse, SearchSummary, SentimentItem
 from backend.app.services.reddit_client import RedditClient
 from backend.app.services.sentiment import SentimentService
 
@@ -160,7 +160,7 @@ def analyze_keyword(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error during analysis")
 
 
-@router.get("/searches", response_model=list[SearchSummary])
+@router.get("/searches", response_model=SearchListResponse)
 def list_searches(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """
     Retrieve list of recent searches with pagination support.
@@ -173,7 +173,7 @@ def list_searches(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
         db: Database session dependency
         
     Returns:
-        List of SearchSummary objects
+        Paginated search history payload with metadata
     """
     # Validate pagination parameters
     skip = max(0, skip)
@@ -181,10 +181,11 @@ def list_searches(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
     
     try:
         logger.debug(f"Fetching searches with skip={skip}, limit={limit}")
+        total = db.query(Search).count()
         rows = db.query(Search).order_by(desc(Search.created_at)).offset(skip).limit(limit).all()
         logger.info(f"Retrieved {len(rows)} searches (skip={skip}, limit={limit})")
-        
-        return [
+
+        items = [
             SearchSummary(
                 id=row.id,
                 keyword=row.keyword,
@@ -199,6 +200,14 @@ def list_searches(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
             )
             for row in rows
         ]
+
+        return SearchListResponse(
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+            has_more=(skip + len(items)) < total,
+        )
     except OperationalError as e:
         logger.error(f"Database connection error retrieving searches: {str(e)}", exc_info=True)
         raise HTTPException(
