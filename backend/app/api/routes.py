@@ -1,6 +1,9 @@
 import csv
 import io
 import logging
+import re
+from datetime import datetime, timezone
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +21,23 @@ from backend.app.services.sentiment import SentimentService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["sentiment"])
+
+
+def _sanitize_csv_cell(value: object) -> str:
+    """Prevent spreadsheet formula injection while preserving text content."""
+    if value is None:
+        return ""
+
+    text = str(value)
+    if text and text[0] in ("=", "+", "-", "@"):
+        return f"'{text}"
+    return text
+
+
+def _safe_filename_fragment(value: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip())
+    normalized = normalized.strip("-")
+    return normalized[:48] or "search"
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -313,8 +333,16 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
 
         rows = db.query(SentimentResult).filter(SentimentResult.search_id == search_id).all()
 
-        output = io.StringIO()
+        output = io.StringIO(newline="")
         writer = csv.writer(output)
+        writer.writerow(["exported_at_utc", datetime.now(timezone.utc).isoformat()])
+        writer.writerow(["search_id", str(search.id)])
+        writer.writerow(["keyword", _sanitize_csv_cell(search.keyword)])
+        writer.writerow(["source", search.source])
+        writer.writerow(["requested_limit", search.requested_limit])
+        writer.writerow(["fetched_count", search.fetched_count])
+        writer.writerow(["analyzed_count", search.analyzed_count])
+        writer.writerow([])
         writer.writerow(
             [
                 "source_post_id",
@@ -335,12 +363,12 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
         for row in rows:
             writer.writerow(
                 [
-                    row.source_post_id,
-                    row.author,
-                    row.subreddit,
-                    row.title,
-                    row.body,
-                    row.permalink,
+                    _sanitize_csv_cell(row.source_post_id),
+                    _sanitize_csv_cell(row.author),
+                    _sanitize_csv_cell(row.subreddit),
+                    _sanitize_csv_cell(row.title),
+                    _sanitize_csv_cell(row.body),
+                    _sanitize_csv_cell(row.permalink),
                     row.posted_at.isoformat() if row.posted_at else "",
                     float(row.neg_score),
                     float(row.neu_score),
@@ -351,12 +379,20 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
             )
 
         output.seek(0)
+        csv_content = output.getvalue().encode("utf-8-sig")
         logger.info(f"CSV export generated for search {search_id} with {len(rows)} rows")
 
+        keyword_fragment = _safe_filename_fragment(search.keyword)
+        timestamp_fragment = search.created_at.strftime("%Y%m%d_%H%M%S")
+        filename = f"sentiview_{keyword_fragment}_{timestamp_fragment}.csv"
+        content_disposition = (
+            f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"
+        )
+
         return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=search_{search_id}.csv"},
+            iter([csv_content]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": content_disposition},
         )
     except HTTPException:
         raise

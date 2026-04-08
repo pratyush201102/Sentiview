@@ -3,6 +3,10 @@ const state = {
   distributionChart: null,
   trendChart: null,
   loading: false,
+  historySkip: 0,
+  historyLimit: 10,
+  historyTotal: 0,
+  historyHasMore: false,
 };
 
 const REQUEST_TIMEOUT_MS = 20000;
@@ -52,6 +56,9 @@ const el = {
   exportBtn: document.getElementById("exportBtn"),
   status: document.getElementById("status"),
   historyMeta: document.getElementById("historyMeta"),
+  historyPrevBtn: document.getElementById("historyPrevBtn"),
+  historyNextBtn: document.getElementById("historyNextBtn"),
+  historyPageInfo: document.getElementById("historyPageInfo"),
   historyBody: document.getElementById("historyBody"),
   mKeyword: document.getElementById("mKeyword"),
   mFetched: document.getElementById("mFetched"),
@@ -103,6 +110,7 @@ function setLoading(isLoading) {
   });
 
   el.analyzeBtn.disabled = isLoading;
+  updateHistoryControls();
 }
 
 function setStatus(message, isError = false) {
@@ -170,6 +178,17 @@ function updateSummary(search) {
   el.mNegative.textContent = String(search.negative_count);
 }
 
+function clearSummary() {
+  updateSummary({
+    keyword: "-",
+    fetched_count: 0,
+    analyzed_count: 0,
+    positive_count: 0,
+    neutral_count: 0,
+    negative_count: 0,
+  });
+}
+
 function formatPercent(value, total) {
   if (!total) {
     return "0.0";
@@ -194,12 +213,25 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function safeText(value, fallback = "") {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text || text.toLowerCase() === "undefined" || text.toLowerCase() === "null") {
+    return fallback;
+  }
+  return text;
+}
+
 function renderDistributionChart(search) {
   if (state.distributionChart) {
     state.distributionChart.destroy();
   }
 
-  const values = [search.positive_count, search.neutral_count, search.negative_count];
+  const sentimentLabels = ["Positive", "Neutral", "Negative"];
+  const values = [
+    Number(search.positive_count ?? 0),
+    Number(search.neutral_count ?? 0),
+    Number(search.negative_count ?? 0),
+  ].map((value) => (Number.isFinite(value) && value > 0 ? value : 0));
   const total = values.reduce((sum, value) => sum + value, 0);
   const hasData = total > 0;
 
@@ -207,7 +239,7 @@ function renderDistributionChart(search) {
     type: "doughnut",
     plugins: [centerTextPlugin],
     data: {
-      labels: ["Positive", "Neutral", "Negative"],
+      labels: sentimentLabels,
       datasets: [
         {
           data: hasData ? values : [1],
@@ -231,25 +263,7 @@ function renderDistributionChart(search) {
           subText: "analyzed posts",
         },
         legend: {
-          position: "bottom",
-          labels: {
-            filter: (item) => hasData || item.text === "No Data",
-            generateLabels: (chart) => {
-              if (!hasData) {
-                return [
-                  {
-                    text: "No Data",
-                    fillStyle: chartColors.muted,
-                    strokeStyle: chartColors.muted,
-                    lineWidth: 0,
-                    hidden: false,
-                    index: 0,
-                  },
-                ];
-              }
-              return Chart.defaults.plugins.legend.labels.generateLabels(chart);
-            },
-          },
+          display: false,
         },
         tooltip: {
           callbacks: {
@@ -258,7 +272,15 @@ function renderDistributionChart(search) {
                 return "No analyzed posts";
               }
               const value = Number(context.raw || 0);
-              return `${context.label}: ${value} (${formatPercent(value, total)}%)`;
+              const chartLabel = Array.isArray(context.chart?.data?.labels)
+                ? context.chart.data.labels[context.dataIndex]
+                : "";
+              const label =
+                safeText(context.label) ||
+                safeText(chartLabel) ||
+                safeText(sentimentLabels[Number(context.dataIndex)]) ||
+                "Sentiment";
+              return `${label}: ${value} (${formatPercent(value, total)}%)`;
             },
           },
         },
@@ -350,7 +372,12 @@ function renderTrendChart(searches) {
               }
               const index = items[0].dataIndex;
               const item = slice[index];
-              return `${item.keyword} · ${new Date(item.created_at).toLocaleString()}`;
+              if (!item) {
+                return "Search result";
+              }
+              const keyword = safeText(item.keyword, "Search result");
+              const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : "Unknown time";
+              return `${keyword} · ${createdAt}`;
             },
             footer: (items) => {
               if (!hasData || items.length === 0) {
@@ -378,6 +405,13 @@ function renderHistory(searches) {
 
   searches.forEach((item) => {
     const row = document.createElement("tr");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `Load search ${item.keyword}`);
+    if (item.id === state.activeSearchId) {
+      row.classList.add("selected");
+    }
+
     row.innerHTML = `
       <td>${escapeHtml(item.keyword)}</td>
       <td>${escapeHtml(new Date(item.created_at).toLocaleString())}</td>
@@ -391,8 +425,23 @@ function renderHistory(searches) {
       await loadSearch(item.id);
     });
 
+    row.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        await loadSearch(item.id);
+      }
+    });
+
     el.historyBody.appendChild(row);
   });
+}
+
+function updateHistoryControls() {
+  const currentPage = Math.floor(state.historySkip / state.historyLimit) + 1;
+  const totalPages = Math.max(1, Math.ceil(state.historyTotal / state.historyLimit));
+  el.historyPageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+  el.historyPrevBtn.disabled = state.historySkip === 0 || state.loading;
+  el.historyNextBtn.disabled = !state.historyHasMore || state.loading;
 }
 
 async function loadSearch(searchId) {
@@ -404,24 +453,46 @@ async function loadSearch(searchId) {
 
     updateSummary(payload.search);
     renderDistributionChart(payload.search);
-    setStatus(`Loaded search: ${payload.search.keyword}`);
+    setStatus(`Loaded search: ${safeText(payload.search.keyword, "Untitled")}`);
   } finally {
     setLoading(false);
   }
 }
 
 async function loadHistory() {
-  const payload = await request("/searches");
+  const payload = await request(`/searches?skip=${state.historySkip}&limit=${state.historyLimit}`);
   const searches = Array.isArray(payload.items) ? payload.items : [];
   const total = Number(payload.total || 0);
 
-  el.historyMeta.textContent = `Showing ${searches.length} of ${total} searches`;
+  state.historyTotal = total;
+  state.historyHasMore = Boolean(payload.has_more);
+
+  const startIndex = total > 0 ? state.historySkip + 1 : 0;
+  const endIndex = state.historySkip + searches.length;
+  el.historyMeta.textContent = `Showing ${startIndex}-${endIndex} of ${total} searches`;
+  updateHistoryControls();
   renderHistory(searches);
   renderTrendChart(searches);
 
-  if (searches.length > 0 && !state.activeSearchId) {
-    await loadSearch(searches[0].id);
+  if (searches.length === 0) {
+    state.activeSearchId = null;
+    el.exportBtn.disabled = true;
+    clearSummary();
+    renderDistributionChart({ positive_count: 0, neutral_count: 0, negative_count: 0 });
+    setStatus("No search history yet. Run your first analysis.");
+    return;
   }
+
+  if (!searches.some((item) => item.id === state.activeSearchId)) {
+    state.activeSearchId = null;
+  }
+
+  if (!state.activeSearchId) {
+    await loadSearch(searches[0].id);
+    return;
+  }
+
+  renderHistory(searches);
 }
 
 async function bootDashboard() {
@@ -470,12 +541,17 @@ async function handleAnalyze(event) {
 
     state.activeSearchId = payload.search.id;
     el.exportBtn.disabled = false;
+    state.historySkip = 0;
 
     updateSummary(payload.search);
     renderDistributionChart(payload.search);
     await loadHistory();
 
-    setStatus(`Analysis complete: ${payload.search.analyzed_count} posts analyzed.`);
+    if (payload.search.analyzed_count === 0) {
+      setStatus("Analysis completed, but no analyzable text was found in the fetched posts.");
+    } else {
+      setStatus(`Analysis complete: ${payload.search.analyzed_count} posts analyzed.`);
+    }
   } catch (error) {
     setStatus(`Analyze failed: ${error.message}`, true);
   } finally {
@@ -495,7 +571,25 @@ function handleExport() {
   link.click();
 }
 
+async function handleHistoryPrevious() {
+  if (state.loading || state.historySkip === 0) {
+    return;
+  }
+  state.historySkip = Math.max(0, state.historySkip - state.historyLimit);
+  await loadHistory();
+}
+
+async function handleHistoryNext() {
+  if (state.loading || !state.historyHasMore) {
+    return;
+  }
+  state.historySkip += state.historyLimit;
+  await loadHistory();
+}
+
 el.analyzeForm.addEventListener("submit", handleAnalyze);
 el.exportBtn.addEventListener("click", handleExport);
+el.historyPrevBtn.addEventListener("click", handleHistoryPrevious);
+el.historyNextBtn.addEventListener("click", handleHistoryNext);
 
 bootDashboard();

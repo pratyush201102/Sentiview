@@ -4,13 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sentiview Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <header class="container header py-3 md:py-4">
-      <div>
+      <div class="hero-copy">
         <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">Sentiview Dashboard</h1>
         <p class="text-sm md:text-base text-slate-600">Analyze Reddit sentiment and visualize results.</p>
       </div>
@@ -22,7 +28,7 @@
 
     <main class="container grid gap-4 lg:grid-cols-2" id="dashboardRoot">
       <section class="card" id="analyzeCard">
-        <h2>Analyze Keyword</h2>
+        <h2 class="section-title">Analyze Keyword</h2>
         <form id="analyzeForm" class="form-grid">
           <label for="keyword">Keyword</label>
           <input id="keyword" type="text" minlength="2" required placeholder="e.g. AI ethics" />
@@ -36,7 +42,7 @@
       </section>
 
       <section class="card" id="summaryCard">
-        <h2>Search Summary</h2>
+        <h2 class="section-title">Search Summary</h2>
         <div class="metrics" id="metrics">
           <div class="metric"><span>Keyword</span><strong id="mKeyword" class="metric-value">-</strong></div>
           <div class="metric"><span>Fetched</span><strong id="mFetched" class="metric-value">0</strong></div>
@@ -45,24 +51,36 @@
           <div class="metric"><span>Neutral</span><strong id="mNeutral" class="metric-value">0</strong></div>
           <div class="metric"><span>Negative</span><strong id="mNegative" class="metric-value">0</strong></div>
         </div>
-        <button id="exportBtn" disabled>Export CSV</button>
+        <button id="exportBtn" class="btn-secondary" disabled>Export CSV</button>
       </section>
 
       <section class="card chart-card" id="distributionCard">
-        <h2>Sentiment Distribution</h2>
+        <h2 class="section-title">Sentiment Distribution</h2>
+        <div class="sentiment-key" aria-label="Sentiment color key">
+          <span><i class="swatch swatch-positive" aria-hidden="true"></i>Positive</span>
+          <span><i class="swatch swatch-neutral" aria-hidden="true"></i>Neutral</span>
+          <span><i class="swatch swatch-negative" aria-hidden="true"></i>Negative</span>
+        </div>
         <canvas id="distributionChart"></canvas>
       </section>
 
       <section class="card chart-card" id="trendCard">
-        <h2>Recent Search Trends</h2>
+        <h2 class="section-title">Recent Search Trends</h2>
         <canvas id="trendChart"></canvas>
       </section>
 
       <section class="card full-width lg:col-span-2" id="historyCard">
-        <h2>Search History</h2>
-        <p id="historyMeta" class="text-sm text-slate-500 mb-2">Showing 0 of 0 searches</p>
+        <h2 class="section-title">Search History</h2>
+        <div class="history-toolbar">
+          <p id="historyMeta" class="text-sm text-slate-500 mb-2" aria-live="polite">Showing 0 of 0 searches</p>
+          <div class="history-pagination" aria-label="Search history pagination">
+            <button id="historyPrevBtn" type="button" disabled>Previous</button>
+            <span id="historyPageInfo" aria-live="polite">Page 1</span>
+            <button id="historyNextBtn" type="button" disabled>Next</button>
+          </div>
+        </div>
         <div class="table-wrap">
-          <table>
+          <table aria-label="Search history table">
             <thead>
               <tr>
                 <th>Keyword</th>
