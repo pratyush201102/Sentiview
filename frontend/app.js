@@ -18,6 +18,21 @@ const chartColors = {
   muted: "#cbd5e1",
 };
 
+const exportColumns = [
+  "source_post_id",
+  "author",
+  "subreddit",
+  "title",
+  "body",
+  "permalink",
+  "posted_at",
+  "neg_score",
+  "neu_score",
+  "pos_score",
+  "compound_score",
+  "sentiment_label",
+];
+
 const centerTextPlugin = {
   id: "centerText",
   afterDraw(chart, _args, pluginOptions) {
@@ -54,6 +69,7 @@ const el = {
   limit: document.getElementById("limit"),
   analyzeBtn: document.getElementById("analyzeBtn"),
   exportBtn: document.getElementById("exportBtn"),
+  exportColumns: document.getElementById("exportColumns"),
   status: document.getElementById("status"),
   historyMeta: document.getElementById("historyMeta"),
   historyPrevBtn: document.getElementById("historyPrevBtn"),
@@ -72,6 +88,50 @@ const el = {
   trendCard: document.getElementById("trendCard"),
   historyCard: document.getElementById("historyCard"),
 };
+
+function toLabel(columnName) {
+  return columnName
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function initExportColumns() {
+  if (!el.exportColumns) {
+    return;
+  }
+
+  el.exportColumns.innerHTML = "";
+
+  exportColumns.forEach((column) => {
+    const item = document.createElement("label");
+    item.className = "export-column-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = column;
+    checkbox.checked = true;
+
+    const text = document.createElement("span");
+    text.textContent = toLabel(column);
+
+    item.appendChild(checkbox);
+    item.appendChild(text);
+    el.exportColumns.appendChild(item);
+  });
+}
+
+function getSelectedExportColumns() {
+  if (!el.exportColumns) {
+    return exportColumns;
+  }
+
+  const selected = Array.from(el.exportColumns.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((input) => input.value)
+    .filter((column) => exportColumns.includes(column));
+
+  return selected;
+}
 
 function getApiBase() {
   return el.apiBase.value.trim().replace(/\/$/, "");
@@ -564,8 +624,16 @@ function handleExport() {
     return;
   }
 
+  const selectedColumns = getSelectedExportColumns();
+  if (selectedColumns.length === 0) {
+    setStatus("Select at least one column for CSV export.", true);
+    return;
+  }
+
+  const query = new URLSearchParams({ columns: selectedColumns.join(",") }).toString();
+
   const link = document.createElement("a");
-  link.href = `${getApiBase()}/searches/${state.activeSearchId}/export.csv`;
+  link.href = `${getApiBase()}/searches/${state.activeSearchId}/export.csv?${query}`;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.click();
@@ -592,4 +660,5 @@ el.exportBtn.addEventListener("click", handleExport);
 el.historyPrevBtn.addEventListener("click", handleHistoryPrevious);
 el.historyNextBtn.addEventListener("click", handleHistoryNext);
 
+initExportColumns();
 bootDashboard();
