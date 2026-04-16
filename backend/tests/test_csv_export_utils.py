@@ -1,4 +1,7 @@
-from backend.app.api.routes import _safe_filename_fragment, _sanitize_csv_cell
+import pytest
+from fastapi import HTTPException
+
+from backend.app.api.routes import _parse_csv_columns, _safe_filename_fragment, _sanitize_csv_cell
 
 
 def test_sanitize_csv_cell_handles_none():
@@ -22,3 +25,42 @@ def test_safe_filename_fragment_normalizes_input():
 
 def test_safe_filename_fragment_fallback_when_empty():
     assert _safe_filename_fragment("   ") == "search"
+
+
+def test_parse_csv_columns_returns_default_order_when_not_provided():
+    columns = _parse_csv_columns(None)
+    assert columns == [
+        "source_post_id",
+        "author",
+        "subreddit",
+        "title",
+        "body",
+        "permalink",
+        "posted_at",
+        "neg_score",
+        "neu_score",
+        "pos_score",
+        "compound_score",
+        "sentiment_label",
+    ]
+
+
+def test_parse_csv_columns_supports_comma_separated_and_repeated_params():
+    columns = _parse_csv_columns(["title, sentiment_label", "author", "title"])
+    assert columns == ["author", "title", "sentiment_label"]
+
+
+def test_parse_csv_columns_rejects_invalid_values():
+    with pytest.raises(HTTPException) as exc:
+        _parse_csv_columns(["title", "not_a_column"])
+
+    assert exc.value.status_code == 400
+    assert "Invalid CSV columns" in str(exc.value.detail)
+
+
+def test_parse_csv_columns_rejects_empty_input_values():
+    with pytest.raises(HTTPException) as exc:
+        _parse_csv_columns([" ,  ", ""])
+
+    assert exc.value.status_code == 400
+    assert "At least one valid CSV column" in str(exc.value.detail)

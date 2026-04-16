@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -21,6 +21,21 @@ from backend.app.services.sentiment import SentimentService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["sentiment"])
+
+CSV_EXPORT_COLUMN_ORDER = [
+    "source_post_id",
+    "author",
+    "subreddit",
+    "title",
+    "body",
+    "permalink",
+    "posted_at",
+    "neg_score",
+    "neu_score",
+    "pos_score",
+    "compound_score",
+    "sentiment_label",
+]
 
 
 def _sanitize_csv_cell(value: object) -> str:
@@ -38,6 +53,70 @@ def _safe_filename_fragment(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip())
     normalized = normalized.strip("-")
     return normalized[:48] or "search"
+
+
+def _parse_csv_columns(columns: list[str] | None) -> list[str]:
+    """Parse and validate requested CSV columns from query params."""
+    if not columns:
+        return CSV_EXPORT_COLUMN_ORDER[:]
+
+    parsed_columns: list[str] = []
+    seen: set[str] = set()
+
+    for raw_value in columns:
+        for column in raw_value.split(","):
+            candidate = column.strip()
+            if not candidate:
+                continue
+            if candidate not in seen:
+                parsed_columns.append(candidate)
+                seen.add(candidate)
+
+    if not parsed_columns:
+        raise HTTPException(status_code=400, detail="At least one valid CSV column must be provided.")
+
+    invalid_columns = [column for column in parsed_columns if column not in CSV_EXPORT_COLUMN_ORDER]
+    if invalid_columns:
+        allowed_columns = ", ".join(CSV_EXPORT_COLUMN_ORDER)
+        invalid_values = ", ".join(invalid_columns)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid CSV columns: {invalid_values}. "
+                f"Allowed columns are: {allowed_columns}."
+            ),
+        )
+
+    return [column for column in CSV_EXPORT_COLUMN_ORDER if column in seen]
+
+
+def _csv_value_for_column(row: SentimentResult, column: str) -> str | float:
+    if column == "source_post_id":
+        return _sanitize_csv_cell(row.source_post_id)
+    if column == "author":
+        return _sanitize_csv_cell(row.author)
+    if column == "subreddit":
+        return _sanitize_csv_cell(row.subreddit)
+    if column == "title":
+        return _sanitize_csv_cell(row.title)
+    if column == "body":
+        return _sanitize_csv_cell(row.body)
+    if column == "permalink":
+        return _sanitize_csv_cell(row.permalink)
+    if column == "posted_at":
+        return row.posted_at.isoformat() if row.posted_at else ""
+    if column == "neg_score":
+        return float(row.neg_score)
+    if column == "neu_score":
+        return float(row.neu_score)
+    if column == "pos_score":
+        return float(row.pos_score)
+    if column == "compound_score":
+        return float(row.compound_score)
+    if column == "sentiment_label":
+        return row.sentiment_label
+
+    raise ValueError(f"Unexpected CSV column: {column}")
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -310,7 +389,18 @@ def get_search(search_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/searches/{search_id}/export.csv")
-def export_search_csv(search_id: str, db: Session = Depends(get_db)):
+def export_search_csv(
+    search_id: str,
+    columns: list[str] | None = Query(
+        default=None,
+        description=(
+            "Optional columns to include in CSV export. "
+            "Use comma-separated values or repeat the columns query parameter."
+        ),
+        examples=["source_post_id,title,sentiment_label"],
+    ),
+    db: Session = Depends(get_db),
+):
     """
     Export search results as CSV file.
     
@@ -326,6 +416,8 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
     """
     try:
         logger.debug(f"Exporting CSV for search: {search_id}")
+        selected_columns = _parse_csv_columns(columns)
+
         search = db.query(Search).filter(Search.id == search_id).first()
         if not search:
             logger.warning(f"Search not found for export: {search_id}")
@@ -343,40 +435,10 @@ def export_search_csv(search_id: str, db: Session = Depends(get_db)):
         writer.writerow(["fetched_count", search.fetched_count])
         writer.writerow(["analyzed_count", search.analyzed_count])
         writer.writerow([])
-        writer.writerow(
-            [
-                "source_post_id",
-                "author",
-                "subreddit",
-                "title",
-                "body",
-                "permalink",
-                "posted_at",
-                "neg_score",
-                "neu_score",
-                "pos_score",
-                "compound_score",
-                "sentiment_label",
-            ]
-        )
+        writer.writerow(selected_columns)
 
         for row in rows:
-            writer.writerow(
-                [
-                    _sanitize_csv_cell(row.source_post_id),
-                    _sanitize_csv_cell(row.author),
-                    _sanitize_csv_cell(row.subreddit),
-                    _sanitize_csv_cell(row.title),
-                    _sanitize_csv_cell(row.body),
-                    _sanitize_csv_cell(row.permalink),
-                    row.posted_at.isoformat() if row.posted_at else "",
-                    float(row.neg_score),
-                    float(row.neu_score),
-                    float(row.pos_score),
-                    float(row.compound_score),
-                    row.sentiment_label,
-                ]
-            )
+            writer.writerow([_csv_value_for_column(row, column) for column in selected_columns])
 
         output.seek(0)
         csv_content = output.getvalue().encode("utf-8-sig")
