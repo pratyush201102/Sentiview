@@ -176,6 +176,18 @@ function setLoading(isLoading) {
 function setStatus(message, isError = false) {
   el.status.textContent = message;
   el.status.style.color = isError ? "#b91c1c" : "#0f172a";
+  // Hide the status element when showing the default "Dashboard ready" message
+  if (!isError && message === "Dashboard ready.") {
+    el.status.style.visibility = "hidden";
+    el.status.style.margin = "0";
+    el.status.style.height = "0";
+    el.status.style.padding = "0";
+  } else {
+    el.status.style.visibility = "visible";
+    el.status.style.margin = "";
+    el.status.style.height = "";
+    el.status.style.padding = "";
+  }
 }
 
 async function checkBackendHealth() {
