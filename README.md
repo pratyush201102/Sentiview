@@ -31,6 +31,7 @@ This will:
 - Start PostgreSQL (if available)
 - Initialize the database schema
 - Launch the FastAPI server with hot-reload
+- Launch the frontend static server on port 5173
 - Automatically open the API docs in your browser
 
 ### Manual Setup
@@ -50,7 +51,9 @@ If you prefer manual setup or the script doesn't work:
 6. Start API:
    - `uvicorn backend.app.main:app --reload --port 8000`
 
-Once running, access the API documentation at `http://localhost:8000/docs`
+Once running, access:
+- API documentation: `http://localhost:8000/docs`
+- Frontend dashboard: `http://localhost:5173`
 
 ## API Endpoints
 - `GET /health` — service health check.
@@ -91,3 +94,42 @@ Once running, access the API documentation at `http://localhost:8000/docs`
 3. Open `http://localhost:5173`
 
 Default API base in UI: `http://localhost:8000/api/v1`
+
+## Validation and Testing
+
+### Automated Integration Testing
+Run the full backend test suite, including endpoint-level integration tests:
+
+```bash
+pytest backend/tests -q
+```
+
+The endpoint integration suite validates:
+- `GET /health`
+- `GET /api/v1/searches`
+- `GET /api/v1/searches/{search_id}`
+- `GET /api/v1/searches/{search_id}/export.csv` with column filtering
+
+### Sentiment Accuracy Audit (100-post Manual Sample)
+Use a manually labeled CSV to compare human labels vs VADER predictions and compute precision/recall metrics.
+
+1. Prepare a CSV with at least 100 rows and required columns:
+   - `text`
+   - `human_label` (`positive`, `neutral`, or `negative`)
+2. Use `backend/audit/sample_manual_audit.csv` as the format reference.
+3. Run the audit script:
+
+```bash
+python -m backend.tools.sentiment_audit --input backend/audit/manual_audit_100.csv
+```
+
+4. Review generated report at:
+   - `backend/audit/sentiment_audit_report.json`
+
+The report includes:
+- Accuracy
+- Macro precision
+- Macro recall
+- Macro F1
+- Per-class precision/recall/F1/support
+- Confusion matrix

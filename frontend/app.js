@@ -349,46 +349,93 @@ function renderDistributionChart(search) {
   });
 }
 
-function renderTrendChart(searches) {
-  const slice = searches.slice(0, 8).reverse();
-  const hasData = slice.length > 0;
-  const labels = hasData
-    ? slice.map((item) => [truncateLabel(item.keyword, 14), new Date(item.created_at).toLocaleDateString()])
-    : ["No data"];
+function toSentimentLabel(score) {
+  if (score > 0.05) {
+    return "positive";
+  }
+  if (score < -0.05) {
+    return "negative";
+  }
+  return "neutral";
+}
 
-  const positiveData = hasData ? slice.map((item) => item.positive_count) : [0];
-  const neutralData = hasData ? slice.map((item) => item.neutral_count) : [0];
-  const negativeData = hasData ? slice.map((item) => item.negative_count) : [0];
+function buildTemporalSeries(results, maxPoints = 24) {
+  const withTimestamps = results
+    .filter((item) => item.posted_at)
+    .map((item) => {
+      const timestamp = new Date(item.posted_at);
+      const score = Number(item.compound_score);
+      return {
+        timestamp,
+        score,
+      };
+    })
+    .filter((item) => Number.isFinite(item.score) && !Number.isNaN(item.timestamp.getTime()))
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  if (withTimestamps.length === 0) {
+    return [];
+  }
+
+  if (withTimestamps.length <= maxPoints) {
+    return withTimestamps;
+  }
+
+  const bucketSize = Math.ceil(withTimestamps.length / maxPoints);
+  const series = [];
+
+  for (let i = 0; i < withTimestamps.length; i += bucketSize) {
+    const bucket = withTimestamps.slice(i, i + bucketSize);
+    if (bucket.length === 0) {
+      continue;
+    }
+    const avgScore = bucket.reduce((sum, point) => sum + point.score, 0) / bucket.length;
+    series.push({
+      timestamp: bucket[bucket.length - 1].timestamp,
+      score: avgScore,
+    });
+  }
+
+  return series;
+}
+
+function renderTrendChart(results, keyword = "") {
+  const series = buildTemporalSeries(Array.isArray(results) ? results : []);
+  const hasData = series.length > 0;
+  const labels = hasData
+    ? series.map((point) => point.timestamp.toLocaleString([], { dateStyle: "short", timeStyle: "short" }))
+    : ["No timestamped posts"];
+  const data = hasData ? series.map((point) => Number(point.score.toFixed(4))) : [0];
 
   if (state.trendChart) {
     state.trendChart.destroy();
   }
 
   state.trendChart = new Chart(el.trendCanvas, {
-    type: "bar",
+    type: "line",
     data: {
       labels,
       datasets: [
         {
-          label: "Positive",
-          data: positiveData,
-          backgroundColor: chartColors.positive,
-          stack: "sentiment",
-          borderRadius: 6,
+          label: "Compound sentiment",
+          data,
+          borderColor: "#0ea5e9",
+          backgroundColor: "rgba(14, 165, 233, 0.15)",
+          borderWidth: 2,
+          pointRadius: hasData ? 3 : 0,
+          pointHoverRadius: 5,
+          tension: 0.3,
+          fill: true,
         },
         {
-          label: "Neutral",
-          data: neutralData,
-          backgroundColor: chartColors.neutral,
-          stack: "sentiment",
-          borderRadius: 6,
-        },
-        {
-          label: "Negative",
-          data: negativeData,
-          backgroundColor: chartColors.negative,
-          stack: "sentiment",
-          borderRadius: 6,
+          label: "Neutral baseline",
+          data: labels.map(() => 0),
+          borderColor: "rgba(100, 116, 139, 0.75)",
+          borderDash: [5, 4],
+          borderWidth: 1,
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
         },
       ],
     },
@@ -401,20 +448,21 @@ function renderTrendChart(searches) {
       },
       scales: {
         x: {
-          stacked: true,
           ticks: {
-            autoSkip: false,
+            autoSkip: true,
+            maxTicksLimit: 7,
             maxRotation: 0,
-            minRotation: 0,
           },
           grid: {
             display: false,
           },
         },
         y: {
-          stacked: true,
-          beginAtZero: true,
-          ticks: { precision: 0 },
+          min: -1,
+          max: 1,
+          ticks: {
+            callback: (value) => Number(value).toFixed(2),
+          },
           grid: {
             color: "#e2e8f0",
           },
@@ -428,23 +476,23 @@ function renderTrendChart(searches) {
           callbacks: {
             title: (items) => {
               if (!hasData || items.length === 0) {
-                return "No search history";
+                return "No temporal sentiment data";
               }
               const index = items[0].dataIndex;
-              const item = slice[index];
-              if (!item) {
-                return "Search result";
+              const point = series[index];
+              if (!point) {
+                return "Sentiment point";
               }
-              const keyword = safeText(item.keyword, "Search result");
-              const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : "Unknown time";
-              return `${keyword} · ${createdAt}`;
+              const chartKeyword = safeText(keyword, "Search");
+              return `${chartKeyword} · ${point.timestamp.toLocaleString()}`;
             },
             footer: (items) => {
               if (!hasData || items.length === 0) {
                 return "";
               }
-              const totalForSearch = items.reduce((sum, point) => sum + Number(point.parsed.y || 0), 0);
-              return `Total analyzed: ${totalForSearch}`;
+              const score = Number(items[0].parsed.y || 0);
+              const label = toSentimentLabel(score);
+              return `Sentiment: ${label} (${score.toFixed(3)})`;
             },
           },
         },
@@ -513,6 +561,7 @@ async function loadSearch(searchId) {
 
     updateSummary(payload.search);
     renderDistributionChart(payload.search);
+    renderTrendChart(payload.results, payload.search.keyword);
     setStatus(`Loaded search: ${safeText(payload.search.keyword, "Untitled")}`);
   } finally {
     setLoading(false);
@@ -532,13 +581,13 @@ async function loadHistory() {
   el.historyMeta.textContent = `Showing ${startIndex}-${endIndex} of ${total} searches`;
   updateHistoryControls();
   renderHistory(searches);
-  renderTrendChart(searches);
 
   if (searches.length === 0) {
     state.activeSearchId = null;
     el.exportBtn.disabled = true;
     clearSummary();
     renderDistributionChart({ positive_count: 0, neutral_count: 0, negative_count: 0 });
+    renderTrendChart([]);
     setStatus("No search history yet. Run your first analysis.");
     return;
   }
@@ -605,6 +654,7 @@ async function handleAnalyze(event) {
 
     updateSummary(payload.search);
     renderDistributionChart(payload.search);
+    renderTrendChart(payload.results, payload.search.keyword);
     await loadHistory();
 
     if (payload.search.analyzed_count === 0) {

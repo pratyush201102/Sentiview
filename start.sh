@@ -69,10 +69,20 @@ echo
 
 # Step 4: Start FastAPI server
 echo -e "${BLUE}4. Starting FastAPI server...${NC}"
+echo -e "${BLUE}5. Starting frontend static server...${NC}"
+
+if lsof -ti:5173 >/dev/null 2>&1; then
+    echo -e "${GREEN}   ✓ Frontend server already running on port 5173${NC}"
+else
+    "$SCRIPT_DIR/.venv/bin/python" -m http.server 5173 --directory frontend >/tmp/sentiview-frontend.log 2>&1 &
+    echo -e "${GREEN}   ✓ Frontend server launched on http://localhost:5173${NC}"
+fi
+
 echo -e "${GREEN}✓ Server launching on http://localhost:8000${NC}\n"
 echo -e "${BLUE}=== Sentiview Ready ===${NC}"
 echo -e "${YELLOW}API Documentation:${NC}   http://localhost:8000/docs"
 echo -e "${YELLOW}Alternative Docs:${NC}   http://localhost:8000/redoc"
+echo -e "${YELLOW}Frontend Dashboard:${NC}  http://localhost:5173"
 echo -e "${YELLOW}Health Check:${NC}        http://localhost:8000/health\n"
 
 # Open in browser (macOS)
